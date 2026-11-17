@@ -11,6 +11,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 
 import com.example.baedalhankki.global.entity.BaseEntity;
+import com.example.baedalhankki.member.entity.Member;
+import com.example.baedalhankki.member.entity.MemberRole;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,11 +34,16 @@ public class Restaurant extends BaseEntity {
     @Column(nullable = false)
     private int deliveryFee;
 
-    public static Restaurant create(String name, int deliveryFee) {
-        if (deliveryFee < 0) {
+    @Column(name = "owner_id", unique = true)
+    private Long ownerId;
+
+    public static Restaurant create(String name, int deliveryFee, Member owner) {
+        if (deliveryFee < 0 || owner == null || owner.getId() == null
+                || owner.getRole() != MemberRole.OWNER) {
             throw new ApiException(ErrorCode.INVALID_REQUEST);
         }
         Restaurant restaurant = new Restaurant();
+        restaurant.ownerId = owner.getId();
         restaurant.name = name;
         restaurant.deliveryFee = deliveryFee;
         return restaurant;
