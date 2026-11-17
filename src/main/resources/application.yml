@@ -13,8 +13,6 @@ spring:
 server:
   error:
     include-message: never
-app:
-  restaurant-id: 1
 ---
 spring:
   config:
