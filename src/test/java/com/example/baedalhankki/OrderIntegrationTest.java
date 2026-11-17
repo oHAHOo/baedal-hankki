@@ -3,6 +3,14 @@ package com.example.baedalhankki;
 import com.example.baedalhankki.member.entity.Member;
 import com.example.baedalhankki.member.entity.MemberRole;
 import com.example.baedalhankki.member.repository.MemberRepository;
+import com.example.baedalhankki.menu.entity.Menu;
+import com.example.baedalhankki.menu.repository.MenuRepository;
+import com.example.baedalhankki.restaurant.entity.Restaurant;
+import com.example.baedalhankki.restaurant.repository.RestaurantRepository;
+
+import java.util.List;
+import java.util.Map;
+import jakarta.persistence.EntityManager;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -19,6 +27,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(
         properties = {
@@ -32,13 +42,23 @@ class OrderIntegrationTest {
     private final ObjectMapper json;
     private final MemberRepository members;
     private final PasswordEncoder passwords;
+    private final RestaurantRepository restaurants;
+    private final MenuRepository menus;
+    private final JdbcTemplate jdbcTemplate;
+    private final EntityManager entityManager;
 
     @Autowired
-    OrderIntegrationTest(MockMvc mvc, ObjectMapper json, MemberRepository members, PasswordEncoder passwords) {
+    OrderIntegrationTest(MockMvc mvc, ObjectMapper json, MemberRepository members, PasswordEncoder passwords,
+            RestaurantRepository restaurants, MenuRepository menus, JdbcTemplate jdbcTemplate,
+            EntityManager entityManager) {
         this.mvc = mvc;
         this.json = json;
         this.members = members;
         this.passwords = passwords;
+        this.restaurants = restaurants;
+        this.menus = menus;
+        this.jdbcTemplate = jdbcTemplate;
+        this.entityManager = entityManager;
     }
 
     MockHttpSession login(String loginId, String password) throws Exception {
@@ -108,12 +128,18 @@ class OrderIntegrationTest {
         var customer = login("customer01", "customer123!");
         var owner = login("owner01", "owner123!");
         long orderId = order(customer);
+        mvc.perform(get("/api/orders").session(customer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orders[0].restaurantName").value("한끼식당"));
+        mvc.perform(get("/api/owner/orders").session(owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.restaurantName").value("한끼식당"))
+                .andExpect(jsonPath("$.orders[0].restaurantName").doesNotExist());
         for (var request : java.util.List.of(get("/api/orders").session(customer),
                 get("/api/owner/orders").session(owner))) {
             mvc.perform(request)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.orders[0].orderId").value(orderId))
-                    .andExpect(jsonPath("$.orders[0].restaurantName").value("한끼식당"))
                     .andExpect(jsonPath("$.orders[0].totalAmount").value(29000))
                     .andExpect(jsonPath("$.orders[0].items[0].quantity").value(2));
         }
@@ -161,6 +187,67 @@ class OrderIntegrationTest {
         var other = login("other", "password123!");
         mvc.perform(get("/api/orders/" + id).session(other)).andExpect(status().isNotFound());
         mvc.perform(patch("/api/orders/" + id + "/cancel").session(other))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @Transactional
+    void 여러_음식점에_주문하고_사장님별로_접근을_분리한다() throws Exception {
+        var secondOwner = members.save(
+                Member.create("owner02", passwords.encode("password123!"), "두 번째 사장님", MemberRole.OWNER));
+        var restaurant = restaurants.save(Restaurant.create("두 번째 식당", 1000, secondOwner));
+        var menu = menus.save(Menu.create(restaurant.getId(), "국수", 7000));
+        var customerSession = login("customer01", "customer123!");
+        var firstOwnerSession = login("owner01", "owner123!");
+        var secondOwnerSession = login("owner02", "password123!");
+        long firstOrderId = order(customerSession);
+        String request = json.writeValueAsString(Map.of(
+                "restaurantId", restaurant.getId(),
+                "items", List.of(Map.of("menuId", menu.getId(), "quantity", 2)),
+                "deliveryAddress", "서울시 마포구 한끼로 12",
+                "addressDetail", "202호",
+                "contactPhone", "01012345678"));
+        var result = mvc.perform(post("/api/orders").session(customerSession)
+                        .contentType("application/json").content(request))
+                .andExpect(status().isCreated()).andReturn();
+        long secondOrderId = json.readTree(result.getResponse().getContentAsString()).get("orderId").asLong();
+        entityManager.flush();
+        entityManager.clear();
+        mvc.perform(get("/api/owner/orders").session(secondOwnerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.restaurantName").value("두 번째 식당"))
+                .andExpect(jsonPath("$.orders.length()").value(1))
+                .andExpect(jsonPath("$.orders[0].orderId").value(secondOrderId));
+        mvc.perform(get("/api/orders/" + secondOrderId).session(customerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalAmount").value(15000));
+        mvc.perform(get("/api/owner/orders/" + firstOrderId).session(secondOwnerSession))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/owner/orders/" + secondOrderId).session(firstOwnerSession))
+                .andExpect(status().isNotFound());
+        for (String action : List.of("accept", "dispatch", "complete")) {
+            mvc.perform(patch("/api/owner/orders/" + secondOrderId + "/" + action).session(firstOwnerSession))
+                    .andExpect(status().isNotFound());
+            mvc.perform(patch("/api/owner/orders/" + secondOrderId + "/" + action).session(secondOwnerSession))
+                    .andExpect(status().isOk());
+        }
+        mvc.perform(post("/api/orders").session(customerSession).contentType("application/json")
+                        .content(request.replace("\"restaurantId\":" + restaurant.getId(), "\"restaurantId\":1")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @Transactional
+    void 소유자_정보가_없는_기존_음식점은_사장님이_접근할_수_없다() throws Exception {
+        var customer = login("customer01", "customer123!");
+        var owner = login("owner01", "owner123!");
+        long orderId = order(customer);
+        jdbcTemplate.update("update restaurant set owner_id = null where id = ?", 1L);
+        mvc.perform(get("/api/owner/orders").session(owner))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/owner/orders/" + orderId).session(owner))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/owner/orders/" + orderId + "/accept").session(owner))
                 .andExpect(status().isNotFound());
     }
 
