@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/baedal
+    username: sa
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+server:
+  error:
+    include-message: never
+app:
+  restaurant-id: 1
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+app:
+  seed: true
