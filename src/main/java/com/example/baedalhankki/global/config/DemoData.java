@@ -39,7 +39,8 @@ public class DemoData implements CommandLineRunner {
             members.save(
                     Member.create("owner01", encoder.encode("owner123!"), "사장님", MemberRole.OWNER));
         if (restaurants.count() == 0) {
-            var restaurant = restaurants.save(Restaurant.create("한끼식당", 3000));
+            var owner = members.findByLoginId("owner01").orElseThrow();
+            var restaurant = restaurants.save(Restaurant.create("한끼식당", 3000, owner));
             menus.save(Menu.create(restaurant.getId(), "제육덮밥", 9000));
             menus.save(Menu.create(restaurant.getId(), "김치찌개", 8000));
             menus.save(Menu.create(restaurant.getId(), "비빔밥", 8500));
