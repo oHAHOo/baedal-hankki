@@ -16,7 +16,8 @@ import com.example.baedalhankki.order.entity.OrderStatus;
 import com.example.baedalhankki.order.repository.OrderRepository;
 import com.example.baedalhankki.restaurant.repository.RestaurantRepository;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
+import com.example.baedalhankki.restaurant.entity.Restaurant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class OrderService {
     private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(OrderService.class);
@@ -31,18 +33,6 @@ public class OrderService {
     private final OrderRepository orders;
     private final RestaurantRepository restaurants;
     private final MenuRepository menus;
-    private final Long restaurantId;
-
-    public OrderService(
-            OrderRepository orders,
-            RestaurantRepository restaurants,
-            MenuRepository menus,
-            @Value("${app.restaurant-id}") Long id) {
-        this.orders = orders;
-        this.restaurants = restaurants;
-        this.menus = menus;
-        restaurantId = id;
-    }
 
     @Transactional
     public OrderStateResponseDto createOrder(Long customerId, OrderCreateRequestDto request) {
@@ -50,9 +40,6 @@ public class OrderService {
                 restaurants
                         .findById(request.restaurantId())
                         .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        if (!restaurant.getId().equals(restaurantId)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST);
-        }
         var seen = new HashSet<Long>();
         var items = new ArrayList<OrderItem>();
         for (var item : request.items()) {
@@ -85,11 +72,9 @@ public class OrderService {
                                 items)));
     }
 
-    private String getRestaurantName(Long id) {
-        return restaurants
-                .findById(id)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND))
-                .getName();
+    private Restaurant findOwnerRestaurant(Long ownerId) {
+        return restaurants.findByOwnerId(ownerId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
     }
 
     private Order findCustomerOrder(Long id, Long customerId) {
@@ -97,7 +82,8 @@ public class OrderService {
                 .orElseThrow(() -> new ApiException(ErrorCode.ORDER_NOT_FOUND));
     }
 
-    private Order findOwnerOrder(Long id) {
+    private Order findOwnerOrder(Long id, Long ownerId) {
+        Long restaurantId = findOwnerRestaurant(ownerId).getId();
         return orders.findByIdAndRestaurantId(id, restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.ORDER_NOT_FOUND));
     }
@@ -121,9 +107,10 @@ public class OrderService {
         return OrderStateResponseDto.from(order);
     }
 
-    public OwnerOrderListResponseDto getOwnerOrders() {
-        var list = orders.findByRestaurantIdOrderByIdDesc(restaurantId);
-        String name = getRestaurantName(restaurantId);
+    public OwnerOrderListResponseDto getOwnerOrders(Long ownerId) {
+        var restaurant = findOwnerRestaurant(ownerId);
+        var list = orders.findByRestaurantIdOrderByIdDesc(restaurant.getId());
+        String name = restaurant.getName();
         return OwnerOrderListResponseDto.of(
                 name,
                 list.stream().filter(order -> order.getStatus() == OrderStatus.PENDING).count(),
@@ -132,29 +119,29 @@ public class OrderService {
                         .toList());
     }
 
-    public OrderDetailResponseDto getOwnerOrder(Long id) {
-        return OrderDetailResponseDto.from(findOwnerOrder(id));
+    public OrderDetailResponseDto getOwnerOrder(Long id, Long ownerId) {
+        return OrderDetailResponseDto.from(findOwnerOrder(id, ownerId));
     }
 
     @Transactional
-    public OrderStateResponseDto acceptOrder(Long id) {
-        var order = findOwnerOrder(id);
+    public OrderStateResponseDto acceptOrder(Long id, Long ownerId) {
+        var order = findOwnerOrder(id, ownerId);
         order.accept();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
     }
 
     @Transactional
-    public OrderStateResponseDto dispatchOrder(Long id) {
-        var order = findOwnerOrder(id);
+    public OrderStateResponseDto dispatchOrder(Long id, Long ownerId) {
+        var order = findOwnerOrder(id, ownerId);
         order.dispatch();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
     }
 
     @Transactional
-    public OrderStateResponseDto completeOrder(Long id) {
-        var order = findOwnerOrder(id);
+    public OrderStateResponseDto completeOrder(Long id, Long ownerId) {
+        var order = findOwnerOrder(id, ownerId);
         order.complete();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
