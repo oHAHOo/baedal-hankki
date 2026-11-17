@@ -7,7 +7,6 @@ import java.util.List;
 
 public record OwnerOrderSummaryResponseDto(
         Long orderId,
-        String restaurantName,
         OrderStatus status,
         List<OrderItemSummaryResponseDto> items,
         int totalAmount,
@@ -18,7 +17,6 @@ public record OwnerOrderSummaryResponseDto(
     public static OwnerOrderSummaryResponseDto from(Order order) {
         return new OwnerOrderSummaryResponseDto(
                 order.getId(),
-                order.getRestaurantName(),
                 order.getStatus(),
                 order.getItems().stream().map(OrderItemSummaryResponseDto::from).toList(),
                 order.getTotalAmount(),
