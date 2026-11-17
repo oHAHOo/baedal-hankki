@@ -1,6 +1,8 @@
 package com.example.baedalhankki.order.controller;
 
 import lombok.RequiredArgsConstructor;
+import com.example.baedalhankki.global.security.AuthMember;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import com.example.baedalhankki.order.dto.OrderDetailResponseDto;
 import com.example.baedalhankki.order.dto.OwnerOrderListResponseDto;
@@ -24,27 +26,31 @@ public class OwnerOrderController {
     private final OrderService orderService;
 
     @GetMapping
-    public ResponseEntity<OwnerOrderListResponseDto> getOrders() {
-        return ResponseEntity.ok(orderService.getOwnerOrders());
+    public ResponseEntity<OwnerOrderListResponseDto> getOrders(@AuthenticationPrincipal AuthMember authMember) {
+        return ResponseEntity.ok(orderService.getOwnerOrders(authMember.memberId()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<OrderDetailResponseDto> getOrder(@PathVariable @Positive Long id) {
-        return ResponseEntity.ok(orderService.getOwnerOrder(id));
+    public ResponseEntity<OrderDetailResponseDto> getOrder(
+            @AuthenticationPrincipal AuthMember authMember, @PathVariable @Positive Long id) {
+        return ResponseEntity.ok(orderService.getOwnerOrder(id, authMember.memberId()));
     }
 
     @PatchMapping("/{id}/accept")
-    public ResponseEntity<OrderStateResponseDto> acceptOrder(@PathVariable @Positive Long id) {
-        return ResponseEntity.ok(orderService.acceptOrder(id));
+    public ResponseEntity<OrderStateResponseDto> acceptOrder(
+            @AuthenticationPrincipal AuthMember authMember, @PathVariable @Positive Long id) {
+        return ResponseEntity.ok(orderService.acceptOrder(id, authMember.memberId()));
     }
 
     @PatchMapping("/{id}/dispatch")
-    public ResponseEntity<OrderStateResponseDto> dispatchOrder(@PathVariable @Positive Long id) {
-        return ResponseEntity.ok(orderService.dispatchOrder(id));
+    public ResponseEntity<OrderStateResponseDto> dispatchOrder(
+            @AuthenticationPrincipal AuthMember authMember, @PathVariable @Positive Long id) {
+        return ResponseEntity.ok(orderService.dispatchOrder(id, authMember.memberId()));
     }
 
     @PatchMapping("/{id}/complete")
-    public ResponseEntity<OrderStateResponseDto> completeOrder(@PathVariable @Positive Long id) {
-        return ResponseEntity.ok(orderService.completeOrder(id));
+    public ResponseEntity<OrderStateResponseDto> completeOrder(
+            @AuthenticationPrincipal AuthMember authMember, @PathVariable @Positive Long id) {
+        return ResponseEntity.ok(orderService.completeOrder(id, authMember.memberId()));
     }
 }
