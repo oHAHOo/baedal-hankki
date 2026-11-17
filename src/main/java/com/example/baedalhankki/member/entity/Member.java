@@ -1,5 +1,8 @@
 package com.example.baedalhankki.member.entity;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 import com.example.baedalhankki.global.entity.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -9,8 +12,11 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import lombok.NoArgsConstructor;
 
 @Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Member extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,8 +35,6 @@ public class Member extends BaseEntity {
     @Column(nullable = false, length = 20)
     private MemberRole role;
 
-    protected Member() {}
-
     public static Member create(String loginId, String passwordHash, String name, MemberRole role) {
         Member member = new Member();
         member.loginId = loginId;
@@ -40,15 +44,4 @@ public class Member extends BaseEntity {
         return member;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public MemberRole getRole() {
-        return role;
-    }
 }

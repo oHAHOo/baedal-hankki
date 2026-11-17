@@ -1,5 +1,9 @@
 package com.example.baedalhankki.menu.entity;
 
+import lombok.NoArgsConstructor;
+import lombok.AccessLevel;
+import lombok.Getter;
+
 import com.example.baedalhankki.global.entity.BaseEntity;
 import com.example.baedalhankki.restaurant.entity.Restaurant;
 
@@ -12,6 +16,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 public class Menu extends BaseEntity {
     @Id
@@ -34,8 +40,6 @@ public class Menu extends BaseEntity {
     @JoinColumn(name = "restaurant_id", insertable = false, updatable = false)
     private Restaurant restaurant;
 
-    protected Menu() {}
-
     public static Menu create(Long restaurantId, String name, int price) {
         if (price < 0) {
             throw new IllegalArgumentException();
@@ -48,23 +52,4 @@ public class Menu extends BaseEntity {
         return menu;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Long getRestaurantId() {
-        return restaurantId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public int getPrice() {
-        return price;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
 }
