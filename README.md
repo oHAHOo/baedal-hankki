@@ -1,2 +1,61 @@
-# -
+# 배달한끼
+
 동네 음식점의 메뉴를 고르고 간편하게 주문할 수 있는 음식 배달 앱
+
+동네 음식점 한 곳의 메뉴를 주문하고 사장님이 접수·배달 상태를 관리하는 Spring Boot REST API입니다.
+
+## 실행
+
+Java **JDK 21**을 설치한 뒤 실행합니다. Gradle Wrapper가 의존성과 Gradle을 내려받습니다.
+
+```bash
+./gradlew test
+./gradlew bootRun --args='--spring.profiles.active=demo'
+```
+
+`demo` 프로필은 로컬 실행용 고객·사장님과 음식점 1곳, 메뉴 4개를 등록합니다.
+
+| 역할 | 아이디 | 비밀번호 |
+| --- | --- | --- |
+| 고객 | customer01 | customer123! |
+| 사장님 | owner01 | owner123! |
+
+기본 DB는 H2 파일 DB(`./data/baedal`)입니다. 일반 프로필은 데모 데이터를 등록하지 않습니다. DB 비밀번호는 `DB_PASSWORD` 환경변수로 지정할 수 있습니다. 사장님 주문 API는 인증 회원 ID와 음식점의 `owner_id`를 연결해 운영 음식점을 조회합니다. 현재 사장님 계정당 음식점 한 곳을 연결하며, 음식점은 여러 곳 등록할 수 있습니다.
+
+기존 DB에 저장된 음식점에는 `owner_id`가 비어 있을 수 있습니다. 실제 운영 사장님의 회원 ID로 값을 지정해야 사장님 API를 사용할 수 있습니다. 연결 전에는 404를 반환합니다. 새 데모 DB는 `owner01` 계정과 음식점을 함께 연결합니다.
+
+## 사용 예시
+
+```bash
+curl -c customer.cookies -H 'Content-Type: application/json' \
+  -d '{"loginId":"customer01","password":"customer123!"}' \
+  http://localhost:8080/api/auth/login
+
+curl -b customer.cookies http://localhost:8080/api/restaurants/1/menus
+
+curl -b customer.cookies -H 'Content-Type: application/json' \
+  -d '{"restaurantId":1,"items":[{"menuId":1,"quantity":2},{"menuId":2,"quantity":1}],"deliveryAddress":"서울시 마포구 한끼로 12","addressDetail":"101동 202호","contactPhone":"01012345678"}' \
+  http://localhost:8080/api/orders
+```
+
+## API
+
+| 메서드 | 경로 | 권한 |
+| --- | --- | --- |
+| POST | /api/auth/login | 비로그인 |
+| GET | /api/members/me | 고객·사장님 |
+| GET | /api/restaurants/{id} | 고객·사장님 |
+| GET | /api/restaurants/{id}/menus | 고객·사장님 |
+| POST | /api/orders | 고객 |
+| GET | /api/orders | 고객 |
+| GET | /api/orders/{id} | 고객 본인 주문 |
+| PATCH | /api/orders/{id}/cancel | 고객 본인 주문 |
+| GET | /api/owner/orders | 사장님 |
+| GET | /api/owner/orders/{id} | 사장님 |
+| PATCH | /api/owner/orders/{id}/accept | 사장님 |
+| PATCH | /api/owner/orders/{id}/dispatch | 사장님 |
+| PATCH | /api/owner/orders/{id}/complete | 사장님 |
+
+가격·배달비·합계는 서버에서 계산합니다. 주문 당시 메뉴명·단가·주소·연락처를 보존합니다. 취소는 접수 대기에서만 가능하며, 완료·취소 상태는 최종 상태입니다.
+
+현재 결과물은 백엔드 API입니다. 모바일 화면은 포함하지 않습니다. 주문 삭제는 취소 상태로 처리합니다.
