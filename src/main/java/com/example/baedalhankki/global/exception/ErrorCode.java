@@ -19,7 +19,8 @@ public enum ErrorCode {
     RESTAURANT_NOT_FOUND(HttpStatus.NOT_FOUND, "대상을 찾을 수 없어요."),
     INVALID_ORDER_STATUS(HttpStatus.CONFLICT, "현재 상태에서는 처리할 수 없어요."),
     MENU_UNAVAILABLE(HttpStatus.CONFLICT, "현재 상태에서는 처리할 수 없어요."),
-    ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "현재 상태에서는 처리할 수 없어요.");
+    ORDER_NOT_CANCELABLE(HttpStatus.CONFLICT, "현재 상태에서는 처리할 수 없어요."),
+    ORDER_UPDATE_CONFLICT(HttpStatus.CONFLICT, "다른 요청이 주문을 처리하고 있어요. 잠시 후 다시 시도해 주세요.");
 
     private final HttpStatus status;
     private final String message;
