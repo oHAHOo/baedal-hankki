@@ -1,5 +1,9 @@
 package com.example.baedalhankki.menu.entity;
 
+import com.example.baedalhankki.global.exception.ErrorCode;
+
+import com.example.baedalhankki.global.exception.ApiException;
+
 import lombok.NoArgsConstructor;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -42,7 +46,7 @@ public class Menu extends BaseEntity {
 
     public static Menu create(Long restaurantId, String name, int price) {
         if (price < 0) {
-            throw new IllegalArgumentException();
+            throw new ApiException(ErrorCode.INVALID_REQUEST);
         }
         Menu menu = new Menu();
         menu.restaurantId = restaurantId;
