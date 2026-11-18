@@ -1,6 +1,7 @@
 package com.example.baedalhankki.global.exception;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +13,13 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class ApiErrors {
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    ResponseEntity<?> lockConflict(PessimisticLockingFailureException exception) {
+        ErrorCode errorCode = ErrorCode.ORDER_UPDATE_CONFLICT;
+        return ResponseEntity.status(errorCode.getStatus())
+                .body(Map.of("code", errorCode.name(), "message", errorCode.getMessage()));
+    }
+
     @ExceptionHandler(ApiException.class)
     ResponseEntity<?> business(ApiException e) {
         return ResponseEntity.status(e.getErrorCode().getStatus())
