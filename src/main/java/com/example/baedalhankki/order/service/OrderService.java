@@ -88,6 +88,12 @@ public class OrderService {
                 .orElseThrow(() -> new ApiException(ErrorCode.ORDER_NOT_FOUND));
     }
 
+    private Order findOwnerOrderForUpdate(Long id, Long ownerId) {
+        Long restaurantId = findOwnerRestaurant(ownerId).getId();
+        return orders.findRestaurantOrderForUpdate(id, restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.ORDER_NOT_FOUND));
+    }
+
     public OrderListResponseDto getOrders(Long customerId) {
         return OrderListResponseDto.of(
                 orders.findByCustomerIdOrderByIdDesc(customerId).stream()
@@ -101,7 +107,8 @@ public class OrderService {
 
     @Transactional
     public OrderStateResponseDto cancelOrder(Long id, Long customerId) {
-        var order = findCustomerOrder(id, customerId);
+        var order = orders.findCustomerOrderForUpdate(id, customerId)
+                .orElseThrow(() -> new ApiException(ErrorCode.ORDER_NOT_FOUND));
         order.cancel();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
@@ -125,7 +132,7 @@ public class OrderService {
 
     @Transactional
     public OrderStateResponseDto acceptOrder(Long id, Long ownerId) {
-        var order = findOwnerOrder(id, ownerId);
+        var order = findOwnerOrderForUpdate(id, ownerId);
         order.accept();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
@@ -133,7 +140,7 @@ public class OrderService {
 
     @Transactional
     public OrderStateResponseDto dispatchOrder(Long id, Long ownerId) {
-        var order = findOwnerOrder(id, ownerId);
+        var order = findOwnerOrderForUpdate(id, ownerId);
         order.dispatch();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
@@ -141,7 +148,7 @@ public class OrderService {
 
     @Transactional
     public OrderStateResponseDto completeOrder(Long id, Long ownerId) {
-        var order = findOwnerOrder(id, ownerId);
+        var order = findOwnerOrderForUpdate(id, ownerId);
         order.complete();
         LOGGER.info("Order {} changed to {}", order.getId(), order.getStatus());
         return OrderStateResponseDto.from(order);
