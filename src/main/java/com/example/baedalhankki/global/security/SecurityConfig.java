@@ -35,7 +35,7 @@ public class SecurityConfig {
                 .securityContext(c -> c.securityContextRepository(repository))
                 .authorizeHttpRequests(
                         a ->
-                                a.requestMatchers("/api/auth/login")
+                                a.requestMatchers("/api/auth/login", "/api/auth/signup")
                                         .permitAll()
                                         .requestMatchers("/api/owner/**")
                                         .hasRole("OWNER")
