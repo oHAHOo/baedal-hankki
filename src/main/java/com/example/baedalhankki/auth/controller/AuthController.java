@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 
 import com.example.baedalhankki.auth.dto.LoginRequestDto;
 import com.example.baedalhankki.auth.dto.RoleResponseDto;
+import com.example.baedalhankki.auth.dto.SignupRequestDto;
 import com.example.baedalhankki.auth.service.AuthService;
 import com.example.baedalhankki.global.security.AuthMember;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,6 +32,12 @@ import java.util.List;
 public class AuthController {
     private final AuthService authService;
     private final HttpSessionSecurityContextRepository repository;
+
+    @PostMapping("/api/auth/signup")
+    public ResponseEntity<Void> signup(@Valid @RequestBody SignupRequestDto request) {
+        authService.signup(request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
 
     @PostMapping("/api/auth/login")
     public ResponseEntity<RoleResponseDto> login(
