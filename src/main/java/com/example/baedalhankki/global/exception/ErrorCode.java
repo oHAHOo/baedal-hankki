@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum ErrorCode {
+    LOGIN_ID_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 아이디예요."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않아요."),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "로그인이 필요해요."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없어요."),
