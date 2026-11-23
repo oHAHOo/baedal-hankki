@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -41,11 +42,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:auth-test;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "app.seed=false"
+        "spring.datasource.url=jdbc:h2:mem:auth-test;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000"
 })
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class AuthIntegrationTest {
     private final MockMvc mvc;
     private final ObjectMapper json;
