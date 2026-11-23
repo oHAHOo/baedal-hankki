@@ -21,6 +21,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -39,10 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:order-concurrency;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000",
-        "spring.jpa.hibernate.ddl-auto=create-drop",
-        "app.seed=false"
+        "spring.datasource.url=jdbc:h2:mem:order-concurrency;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=5000"
 })
+@ActiveProfiles("test")
 class OrderConcurrencyTest {
     private final OrderService orderService;
     private final OrderRepository orders;
