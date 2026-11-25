@@ -39,7 +39,7 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers("/api/owner/**")
                                         .hasRole("OWNER")
-                                        .requestMatchers("/api/orders/**")
+                                        .requestMatchers("/api/orders/**", "/api/payments/**")
                                         .hasRole("CUSTOMER")
                                         .anyRequest()
                                         .authenticated())
