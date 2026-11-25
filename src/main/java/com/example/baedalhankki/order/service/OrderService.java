@@ -69,7 +69,8 @@ public class OrderService {
                                 request.addressDetail(),
                                 phone,
                                 restaurant.getDeliveryFee(),
-                                items)));
+                                items,
+                                request.paymentMethod())));
     }
 
     private Restaurant findOwnerRestaurant(Long ownerId) {
