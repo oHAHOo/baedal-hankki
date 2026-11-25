@@ -10,17 +10,29 @@ Java **JDK 21**을 설치한 뒤 실행합니다. Gradle Wrapper가 의존성과
 
 ```bash
 ./gradlew test
-./gradlew bootRun --args='--spring.profiles.active=demo'
 ```
 
-`demo` 프로필은 로컬 실행용 고객·사장님과 음식점 1곳, 메뉴 4개를 등록합니다.
+로컬 실행은 MySQL에 `baedal_hankki` 데이터베이스와 해당 데이터베이스에 접근할 계정을 준비한 뒤 `local` 프로필을 사용합니다. PowerShell 실행 예시는 다음과 같습니다.
+
+```powershell
+$env:DB_URL = 'jdbc:mysql://localhost:3306/baedal_hankki'
+$env:DB_USERNAME = 'baedal'
+$env:DB_PASSWORD = '설정한 비밀번호'
+./gradlew.bat bootRun --args='--spring.profiles.active=local'
+```
+
+`DB_URL`의 기본값은 `jdbc:mysql://localhost:3306/baedal_hankki`입니다. `DB_USERNAME`과 `DB_PASSWORD`는 필수 환경변수입니다. 로컬에서는 Hibernate가 테이블을 생성·갱신합니다.
+
+공통 설정은 `application.yml`, 로컬 MySQL 설정은 `application-local.yml`에 있습니다. 테스트는 `src/test/resources/application-test.yml`과 테스트 클래스의 `@ActiveProfiles("test")`를 통해 H2 메모리 DB를 사용합니다. 테스트 실행에는 MySQL과 접속 환경변수가 필요하지 않습니다.
+
+데모 데이터가 필요하면 `./gradlew.bat bootRun --args='--spring.profiles.active=local,demo'`로 실행합니다. `demo` 프로필은 고객·사장님과 음식점 1곳, 메뉴 4개를 등록합니다.
 
 | 역할 | 아이디 | 비밀번호 |
 | --- | --- | --- |
 | 고객 | customer01 | customer123! |
 | 사장님 | owner01 | owner123! |
 
-기본 DB는 H2 파일 DB(`./data/baedal`)입니다. 일반 프로필은 데모 데이터를 등록하지 않습니다. DB 비밀번호는 `DB_PASSWORD` 환경변수로 지정할 수 있습니다. 사장님 주문 API는 인증 회원 ID와 음식점의 `owner_id`를 연결해 운영 음식점을 조회합니다. 현재 사장님 계정당 음식점 한 곳을 연결하며, 음식점은 여러 곳 등록할 수 있습니다.
+일반 프로필은 데모 데이터를 등록하지 않습니다. 사장님 주문 API는 인증 회원 ID와 음식점의 `owner_id`를 연결해 운영 음식점을 조회합니다. 현재 사장님 계정당 음식점 한 곳을 연결하며, 음식점은 여러 곳 등록할 수 있습니다.
 
 기존 DB에 저장된 음식점에는 `owner_id`가 비어 있을 수 있습니다. 실제 운영 사장님의 회원 ID로 값을 지정해야 사장님 API를 사용할 수 있습니다. 연결 전에는 404를 반환합니다. 새 데모 DB는 `owner01` 계정과 음식점을 함께 연결합니다.
 
