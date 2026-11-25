@@ -7,6 +7,11 @@ spring:
 server:
   error:
     include-message: never
+app:
+  payment:
+    toss:
+      client-key: ${TOSS_CLIENT_KEY:}
+      secret-key: ${TOSS_SECRET_KEY:}
 ---
 spring:
   config:
