@@ -52,8 +52,11 @@ curl -b customer.cookies -H 'Content-Type: application/json' \
 
 ## API
 
+온라인 결제는 토스페이먼츠 테스트 개별 연동 키를 사용합니다. [결제 API·환경 설정·DB 설계](docs/payment.md)를 참고하세요. 결제창 프론트엔드 연결과 토스 실제 테스트 결제 검증은 별도로 필요합니다.
+
 | 메서드 | 경로 | 권한 |
 | --- | --- | --- |
+| POST | /api/auth/signup | 비로그인 |
 | POST | /api/auth/login | 비로그인 |
 | GET | /api/members/me | 고객·사장님 |
 | GET | /api/restaurants/{id} | 고객·사장님 |
@@ -62,12 +65,15 @@ curl -b customer.cookies -H 'Content-Type: application/json' \
 | GET | /api/orders | 고객 |
 | GET | /api/orders/{id} | 고객 본인 주문 |
 | PATCH | /api/orders/{id}/cancel | 고객 본인 주문 |
+| POST | /api/orders/{id}/payments | 고객 본인 주문 |
+| POST | /api/orders/{id}/payments/confirm | 고객 본인 주문 |
+| GET | /api/orders/{id}/payments | 고객 본인 주문 |
 | GET | /api/owner/orders | 사장님 |
 | GET | /api/owner/orders/{id} | 사장님 |
 | PATCH | /api/owner/orders/{id}/accept | 사장님 |
 | PATCH | /api/owner/orders/{id}/dispatch | 사장님 |
 | PATCH | /api/owner/orders/{id}/complete | 사장님 |
 
-가격·배달비·합계는 서버에서 계산합니다. 주문 당시 메뉴명·단가·주소·연락처를 보존합니다. 취소는 접수 대기에서만 가능하며, 완료·취소 상태는 최종 상태입니다.
+가격·배달비·합계는 서버에서 계산합니다. 주문 당시 메뉴명·단가·주소·연락처를 보존합니다. 취소는 결제 대기 또는 접수 대기에서 가능하며, 승인 확인 중에는 결과 확정 후 취소합니다. 완료·취소 상태는 최종 상태입니다.
 
 현재 결과물은 백엔드 API입니다. 모바일 화면은 포함하지 않습니다. 주문 삭제는 취소 상태로 처리합니다.
