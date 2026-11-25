@@ -10,13 +10,15 @@ public record OrderSummaryResponseDto(
         String restaurantName,
         OrderStatus status,
         List<OrderItemSummaryResponseDto> items,
-        int totalAmount) {
+        int totalAmount,
+        String paymentMethod) {
     public static OrderSummaryResponseDto from(Order order) {
         return new OrderSummaryResponseDto(
                 order.getId(),
                 order.getRestaurantName(),
                 order.getStatus(),
                 order.getItems().stream().map(OrderItemSummaryResponseDto::from).toList(),
-                order.getTotalAmount());
+                order.getTotalAmount(),
+                order.getPaymentMethod());
     }
 }

@@ -91,6 +91,12 @@ public class Order extends BaseEntity {
             String phone,
             int deliveryFee,
             List<OrderItem> items) {
+        return create(restaurantId, customerId, address, detail, phone, deliveryFee, items,
+                PaymentMethod.PAY_ON_DELIVERY);
+    }
+
+    public static Order create(Long restaurantId, Long customerId, String address, String detail,
+            String phone, int deliveryFee, List<OrderItem> items, PaymentMethod paymentMethod) {
         if (items.isEmpty() || deliveryFee < 0) {
             throw new ApiException(ErrorCode.INVALID_REQUEST);
         }
@@ -110,8 +116,11 @@ public class Order extends BaseEntity {
         order.deliveryFee = deliveryFee;
         order.itemsAmount = (int) sum;
         order.totalAmount = (int) sum + deliveryFee;
-        order.paymentMethod = PaymentMethod.PAY_ON_DELIVERY;
-        order.status = OrderStatus.PENDING;
+        order.paymentMethod = paymentMethod == null ? PaymentMethod.PAY_ON_DELIVERY : paymentMethod;
+        if (order.isOnlinePayment() && order.totalAmount <= 0) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST);
+        }
+        order.status = order.isOnlinePayment() ? OrderStatus.WAITING_PAYMENT : OrderStatus.PENDING;
         for (var item : items) {
             item.attach(order);
             order.items.add(item);
@@ -124,10 +133,32 @@ public class Order extends BaseEntity {
     }
 
     public void cancel() {
+        if (isOnlinePayment()) {
+            throw new ApiException(ErrorCode.PAYMENT_STATE_CONFLICT);
+        }
         if (status != OrderStatus.PENDING) {
             throw new ApiException(ErrorCode.ORDER_NOT_CANCELABLE);
         }
         status = OrderStatus.CANCELED;
+    }
+
+    public boolean isOnlinePayment() {
+        return paymentMethod == PaymentMethod.ONLINE;
+    }
+
+    public void markPaid() {
+        transition(OrderStatus.WAITING_PAYMENT, OrderStatus.PENDING);
+    }
+
+    public void beginOnlineCancellation() {
+        if (!isOnlinePayment() || (status != OrderStatus.WAITING_PAYMENT && status != OrderStatus.PENDING)) {
+            throw new ApiException(ErrorCode.ORDER_NOT_CANCELABLE);
+        }
+        status = OrderStatus.CANCELING;
+    }
+
+    public void finishOnlineCancellation() {
+        transition(OrderStatus.CANCELING, OrderStatus.CANCELED);
     }
 
     private void transition(OrderStatus expected, OrderStatus next) {
