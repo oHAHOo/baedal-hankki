@@ -90,7 +90,7 @@ class OrderIntegrationTest {
     long order(MockHttpSession customer) throws Exception {
         var result =
                 mvc.perform(
-                                post("/api/orders")
+                                post("/api/orders").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                                         .session(customer)
                                         .contentType("application/json")
                                         .content(body()))
@@ -208,7 +208,7 @@ class OrderIntegrationTest {
                 "deliveryAddress", "서울시 마포구 한끼로 12",
                 "addressDetail", "202호",
                 "contactPhone", "01012345678"));
-        var result = mvc.perform(post("/api/orders").session(customerSession)
+        var result = mvc.perform(post("/api/orders").header("Idempotency-Key", java.util.UUID.randomUUID().toString()).session(customerSession)
                         .contentType("application/json").content(request))
                 .andExpect(status().isCreated()).andReturn();
         long secondOrderId = json.readTree(result.getResponse().getContentAsString()).get("orderId").asLong();
@@ -232,7 +232,7 @@ class OrderIntegrationTest {
             mvc.perform(patch("/api/owner/orders/" + secondOrderId + "/" + action).session(secondOwnerSession))
                     .andExpect(status().isOk());
         }
-        mvc.perform(post("/api/orders").session(customerSession).contentType("application/json")
+        mvc.perform(post("/api/orders").header("Idempotency-Key", java.util.UUID.randomUUID().toString()).session(customerSession).contentType("application/json")
                         .content(request.replace("\"restaurantId\":" + restaurant.getId(), "\"restaurantId\":1")))
                 .andExpect(status().isBadRequest());
     }
@@ -263,7 +263,7 @@ class OrderIntegrationTest {
                     body().replace("01012345678", "123")
                 }) {
             mvc.perform(
-                            post("/api/orders")
+                            post("/api/orders").header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                                     .session(customer)
                                     .contentType("application/json")
                                     .content(invalid))
