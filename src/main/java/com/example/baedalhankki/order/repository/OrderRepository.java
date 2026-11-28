@@ -12,8 +12,22 @@ import jakarta.persistence.LockModeType;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
+import org.springframework.data.domain.Pageable;
+import com.example.baedalhankki.order.entity.OrderStatus;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
+    Optional<Order> findByCustomerIdAndCheckoutKey(Long customerId, String checkoutKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from Order o where o.id = :id")
+    Optional<Order> findForUpdate(@Param("id") Long id);
+
+    @Query("select o.id from Order o where o.status = :status and o.createdAt <= :cutoff "
+            + "and not exists (select p.id from Payment p where p.orderId = o.id) order by o.id")
+    List<Long> findUnpreparedExpired(@Param("status") OrderStatus status,
+            @Param("cutoff") LocalDateTime cutoff, Pageable page);
+
     Optional<Order> findByIdAndCustomerId(Long id, Long customerId);
 
     Optional<Order> findByIdAndRestaurantId(Long id, Long restaurantId);
