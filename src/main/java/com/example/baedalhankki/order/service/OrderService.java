@@ -3,6 +3,15 @@ package com.example.baedalhankki.order.service;
 import com.example.baedalhankki.global.exception.ApiException;
 import com.example.baedalhankki.global.exception.ErrorCode;
 import com.example.baedalhankki.menu.repository.MenuRepository;
+import com.example.baedalhankki.member.repository.MemberRepository;
+import com.example.baedalhankki.order.entity.PaymentMethod;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
+import java.util.UUID;
+import java.util.Comparator;
 import com.example.baedalhankki.order.dto.OrderCreateRequestDto;
 import com.example.baedalhankki.order.dto.OrderDetailResponseDto;
 import com.example.baedalhankki.order.dto.OrderListResponseDto;
@@ -33,9 +42,29 @@ public class OrderService {
     private final OrderRepository orders;
     private final RestaurantRepository restaurants;
     private final MenuRepository menus;
+    private final MemberRepository members;
+    private final ObjectMapper json;
 
     @Transactional
     public OrderStateResponseDto createOrder(Long customerId, OrderCreateRequestDto request) {
+        return createOrder(customerId, request, UUID.randomUUID().toString());
+    }
+
+    @Transactional
+    public OrderStateResponseDto createOrder(Long customerId, OrderCreateRequestDto request, String checkoutKey) {
+        if (checkoutKey == null || !checkoutKey.matches("[A-Za-z0-9_-]{8,64}")) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST);
+        }
+        members.findForOrderCreation(customerId)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHENTICATED));
+        String hash = fingerprint(request);
+        var existing = orders.findByCustomerIdAndCheckoutKey(customerId, checkoutKey);
+        if (existing.isPresent()) {
+            if (!hash.equals(existing.get().getRequestHash())) {
+                throw new ApiException(ErrorCode.IDEMPOTENCY_CONFLICT);
+            }
+            return OrderStateResponseDto.from(existing.get());
+        }
         var restaurant =
                 restaurants
                         .findById(request.restaurantId())
@@ -60,9 +89,7 @@ public class OrderService {
         String digits = request.contactPhone().replace("-", "");
         String phone =
                 digits.substring(0, 3) + "-" + digits.substring(3, 7) + "-" + digits.substring(7);
-        return OrderStateResponseDto.from(
-                orders.save(
-                        Order.create(
+        Order order = Order.create(
                                 restaurant.getId(),
                                 customerId,
                                 request.deliveryAddress(),
@@ -70,7 +97,22 @@ public class OrderService {
                                 phone,
                                 restaurant.getDeliveryFee(),
                                 items,
-                                request.paymentMethod())));
+                                request.paymentMethod());
+        order.identifyCheckout(checkoutKey, hash);
+        return OrderStateResponseDto.from(orders.save(order));
+    }
+
+    private String fingerprint(OrderCreateRequestDto request) {
+        try {
+            var normalized = new OrderCreateRequestDto(request.restaurantId(),
+                    request.items().stream().sorted(Comparator.comparing(item -> item.menuId())).toList(),
+                    request.deliveryAddress(), request.addressDetail(), request.contactPhone().replace("-", ""),
+                    request.paymentMethod() == null ? PaymentMethod.PAY_ON_DELIVERY : request.paymentMethod());
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(json.writeValueAsBytes(normalized)));
+        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("Unable to fingerprint order", exception);
+        }
     }
 
     private Restaurant findOwnerRestaurant(Long ownerId) {
@@ -121,7 +163,7 @@ public class OrderService {
         String name = restaurant.getName();
         return OwnerOrderListResponseDto.of(
                 name,
-                list.stream().filter(order -> order.getStatus() == OrderStatus.PENDING).count(),
+                list.stream().filter(order -> order.getStatus() == OrderStatus.PENDING && !order.isOnHold()).count(),
                 list.stream()
                         .map(OwnerOrderSummaryResponseDto::from)
                         .toList());
