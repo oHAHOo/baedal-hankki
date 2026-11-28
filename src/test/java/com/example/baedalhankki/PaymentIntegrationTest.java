@@ -546,6 +546,8 @@ class PaymentIntegrationTest {
         jdbc.update("update payments set lease_until = ? where order_id = ?", Instant.now().minusSeconds(1), orderId);
         var second = recoveryStore.claim(orderId);
         assertNotNull(second);
+        assertFalse(recoveryStore.apply(first, new ProviderPayment("stale", "stale_order", 1, 0, "KRW", "CANCELED")));
+        assertEquals(PaymentStatus.READY, payments.findByOrderId(orderId).orElseThrow().getStatus());
         recoveryStore.finish(first, "STALE_WORKER");
         assertEquals(second.token(), payments.findByOrderId(orderId).orElseThrow().getLeaseToken());
         recoveryStore.finish(second, null);
@@ -629,7 +631,14 @@ class PaymentIntegrationTest {
         byte[] raw = json.writeValueAsBytes(Map.of("eventType", "PAYMENT_STATUS_CHANGED", "data", Map.of("orderId", request.orderId())));
         String timestamp = Instant.now().toString();
         webhook.receive(raw, timestamp, sign(raw, timestamp));
-        var event = inboxService.pending().stream().filter(item -> orderId.equals(item.orderId())).findFirst().orElseThrow();
+        // 실제 워커의 다음 회차를 재현하고, 수신 직후의 시각·첫 배치 포함 여부에 의존하지 않는다.
+        jdbc.update("update webhook_inbox set next_attempt_at = ? where provider_order_id = ?", Instant.EPOCH, request.orderId());
+        var pending = inboxService.pending();
+        assertTrue(pending.stream().anyMatch(item -> orderId.equals(item.orderId())),
+                () -> "now=" + Instant.now() + ", pending=" + pending + ", stored="
+                        + inbox.findAll().stream().map(item -> item.getId() + ":" + item.getProviderOrderId()
+                                + ":" + item.getNextAttemptAt() + ":" + item.getProcessedAt()).toList());
+        var event = pending.stream().filter(item -> orderId.equals(item.orderId())).findFirst().orElseThrow();
         inboxService.complete(event.id(), recovery.reconcile(orderId));
         assertNotNull(inbox.findById(event.id()).orElseThrow().getProcessedAt());
         assertTrue(recovery.reconcile(orderId));
@@ -712,6 +721,70 @@ class PaymentIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         assertEquals(json.readTree(first).get("orderId"), json.readTree(second).get("orderId"));
+    }
+
+    @Test
+    void 같은_웹훅을_동시에_수신해도_작업은_한_건만_저장한다() throws Exception {
+        var request = prepare();
+        byte[] raw = json.writeValueAsBytes(Map.of("eventType", "PAYMENT_STATUS_CHANGED", "data", Map.of("orderId", request.orderId())));
+        String timestamp = Instant.now().toString();
+        String signature = sign(raw, timestamp);
+        try (var executor = Executors.newFixedThreadPool(4)) {
+            var futures = java.util.stream.IntStream.range(0, 4).mapToObj(index -> executor.submit(() -> {
+                webhook.receive(raw, timestamp, signature);
+                return true;
+            })).toList();
+            for (var future : futures) {
+                assertTrue(future.get(10, TimeUnit.SECONDS));
+            }
+        }
+        assertEquals(1, inbox.findAll().stream().filter(event -> request.orderId().equals(event.getProviderOrderId())).count());
+    }
+
+    @Test
+    void 한_배치보다_많은_미처리_웹훅도_재시도_지연으로_다음_작업을_처리한다() {
+        var fixtures = java.util.stream.IntStream.range(0, 21).mapToObj(index ->
+                com.example.baedalhankki.refund.entity.WebhookInbox.create(UUID.randomUUID().toString(),
+                        UUID.randomUUID().toString(), Instant.EPOCH)).toList();
+        var ids = inbox.saveAllAndFlush(fixtures).stream().map(event -> event.getId()).toList();
+        try {
+            var first = inboxService.pending();
+            assertEquals(20, first.size());
+            first.forEach(event -> inboxService.complete(event.id(), false));
+            var second = inboxService.pending();
+            assertTrue(second.stream().anyMatch(event -> ids.contains(event.id())));
+            assertTrue(second.stream().noneMatch(event -> first.stream().anyMatch(previous -> previous.id().equals(event.id()))));
+        } finally {
+            inbox.deleteAllById(ids);
+        }
+    }
+
+    @Test
+    void 늦은_승인_웹훅이_와도_토스의_현재_취소_상태를_반영한다() throws Exception {
+        var request = prepare();
+        facade.confirm(orderId, customerId, request);
+        paymentService.beginCancellation(orderId, customerId);
+        remote.set(new ProviderPayment(request.paymentKey(), request.orderId(), request.amount(), 0, "KRW", "CANCELED"));
+        byte[] raw = json.writeValueAsBytes(Map.of("eventType", "PAYMENT_STATUS_CHANGED", "data",
+                Map.of("orderId", request.orderId(), "status", "DONE")));
+        String timestamp = Instant.now().toString();
+        webhook.receive(raw, timestamp, sign(raw, timestamp));
+        assertTrue(recovery.reconcile(orderId));
+        assertEquals(PaymentStatus.CANCELED, payments.findByOrderId(orderId).orElseThrow().getStatus());
+        assertEquals(OrderStatus.CANCELED, orders.findById(orderId).orElseThrow().getStatus());
+        verify(gateway, never()).cancel(anyString(), anyString());
+    }
+
+    @Test
+    void 취소_조회_응답의_금액이_다르면_환불_완료로_확정하지_않는다() {
+        var request = prepare();
+        facade.confirm(orderId, customerId, request);
+        paymentService.beginCancellation(orderId, customerId);
+        remote.set(new ProviderPayment(request.paymentKey(), request.orderId(), 1, 0, "KRW", "CANCELED"));
+        assertFalse(recovery.reconcile(orderId));
+        assertEquals(OrderStatus.CANCELING, orders.findById(orderId).orElseThrow().getStatus());
+        assertEquals(PaymentStatus.CANCELING, payments.findByOrderId(orderId).orElseThrow().getStatus());
+        verify(gateway, never()).cancel(anyString(), anyString());
     }
 
     private String sign(byte[] raw, String timestamp) throws Exception {
