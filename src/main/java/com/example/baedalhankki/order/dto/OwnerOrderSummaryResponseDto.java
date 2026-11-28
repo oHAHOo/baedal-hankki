@@ -13,7 +13,8 @@ public record OwnerOrderSummaryResponseDto(
         String paymentMethod,
         String deliveryAddress,
         String addressDetail,
-        String contactPhone) {
+        String contactPhone,
+        boolean onHold) {
     public static OwnerOrderSummaryResponseDto from(Order order) {
         return new OwnerOrderSummaryResponseDto(
                 order.getId(),
@@ -23,6 +24,7 @@ public record OwnerOrderSummaryResponseDto(
                 order.getPaymentMethod(),
                 order.getDeliveryAddress(),
                 order.getAddressDetail(),
-                order.getContactPhone());
+                order.getContactPhone(),
+                order.isOnHold());
     }
 }
