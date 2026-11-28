@@ -46,11 +46,16 @@ curl -c customer.cookies -H 'Content-Type: application/json' \
 curl -b customer.cookies http://localhost:8080/api/restaurants/1/menus
 
 curl -b customer.cookies -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: example-purchase-uuid' \
   -d '{"restaurantId":1,"items":[{"menuId":1,"quantity":2},{"menuId":2,"quantity":1}],"deliveryAddress":"서울시 마포구 한끼로 12","addressDetail":"101동 202호","contactPhone":"01012345678"}' \
   http://localhost:8080/api/orders
 ```
 
 ## API
+
+주문 생성에는 구매 시도마다 생성한 `Idempotency-Key` 헤더(영문·숫자·밑줄·하이픈 8~64자)가 필요합니다. 같은 구매를 재시도할 때는 같은 키를 유지하고, 새 구매에는 새 키를 사용합니다. 같은 키로 다른 내용을 보내면 409입니다.
+
+[환불 정책](docs/refund-policy.md)과 [환불 API·자동 복구 실행 안내](docs/refund-implementation.md)를 참고하세요.
 
 온라인 결제는 토스페이먼츠 테스트 개별 연동 키를 사용합니다. [결제 API·환경 설정·DB 설계](docs/payment.md)를 참고하세요. 결제창 프론트엔드 연결과 토스 실제 테스트 결제 검증은 별도로 필요합니다.
 
@@ -68,6 +73,15 @@ curl -b customer.cookies -H 'Content-Type: application/json' \
 | POST | /api/orders/{id}/payments | 고객 본인 주문 |
 | POST | /api/orders/{id}/payments/confirm | 고객 본인 주문 |
 | GET | /api/orders/{id}/payments | 고객 본인 주문 |
+| POST / GET | /api/orders/{id}/refunds | 고객 본인 주문 |
+| POST / GET | /api/owner/orders/{id}/refunds | 운영 음식점 사장님 |
+| GET | /api/owner/refund-alerts | 운영 음식점 사장님 |
+| GET | /api/admin/refunds | 운영자 |
+| POST | /api/admin/refunds/{id}/approve, reject, reconcile | 운영자 |
+| POST | /api/admin/refunds/{id}/confirm-cash-return | 운영자 |
+| GET | /api/admin/refund-alerts | 운영자 |
+| POST | /api/admin/refund-alerts/{id}/acknowledge | 운영자 |
+| POST | /api/payments/webhooks/toss | 서명 검증 |
 | GET | /api/owner/orders | 사장님 |
 | GET | /api/owner/orders/{id} | 사장님 |
 | PATCH | /api/owner/orders/{id}/accept | 사장님 |
