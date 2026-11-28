@@ -9,6 +9,10 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum ErrorCode {
+    IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT, "같은 구매 식별자로 다른 주문을 요청할 수 없어요."),
+    INVALID_WEBHOOK(HttpStatus.UNAUTHORIZED, "웹훅을 검증하지 못했어요."),
+    REFUND_NOT_FOUND(HttpStatus.NOT_FOUND, "환불 요청을 찾을 수 없어요."),
+    REFUND_STATE_CONFLICT(HttpStatus.CONFLICT, "현재 환불 상태에서는 처리할 수 없어요."),
     PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "결제 정보를 찾을 수 없어요."),
     PAYMENT_STATE_CONFLICT(HttpStatus.CONFLICT, "현재 결제 상태에서는 처리할 수 없어요."),
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST, "주문 금액과 결제 금액이 일치하지 않아요."),

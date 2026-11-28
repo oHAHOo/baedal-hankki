@@ -8,4 +8,6 @@ spring:
     hibernate:
       ddl-auto: create-drop
 app:
+  refund:
+    enabled: false
   seed: false

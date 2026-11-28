@@ -11,7 +11,8 @@ public record OrderSummaryResponseDto(
         OrderStatus status,
         List<OrderItemSummaryResponseDto> items,
         int totalAmount,
-        String paymentMethod) {
+        String paymentMethod,
+        boolean onHold) {
     public static OrderSummaryResponseDto from(Order order) {
         return new OrderSummaryResponseDto(
                 order.getId(),
@@ -19,6 +20,7 @@ public record OrderSummaryResponseDto(
                 order.getStatus(),
                 order.getItems().stream().map(OrderItemSummaryResponseDto::from).toList(),
                 order.getTotalAmount(),
-                order.getPaymentMethod());
+                order.getPaymentMethod(),
+                order.isOnHold());
     }
 }

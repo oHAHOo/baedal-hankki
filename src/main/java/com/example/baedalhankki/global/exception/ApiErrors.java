@@ -49,6 +49,7 @@ public class ApiErrors {
 
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
+            org.springframework.web.bind.MissingRequestHeaderException.class,
             HandlerMethodValidationException.class,
             MethodArgumentTypeMismatchException.class
     })

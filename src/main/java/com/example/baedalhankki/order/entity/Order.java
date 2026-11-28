@@ -26,13 +26,14 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", uniqueConstraints = @UniqueConstraint(columnNames = {"customer_id", "checkout_key"}))
 @Getter
 public class Order extends BaseEntity {
     @Id
@@ -44,6 +45,15 @@ public class Order extends BaseEntity {
 
     @Column(name = "customer_id", nullable = false)
     private Long customerId;
+
+    @Column(name = "checkout_key", length = 64)
+    private String checkoutKey;
+
+    @Column(name = "request_hash", length = 64)
+    private String requestHash;
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean onHold;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -150,6 +160,31 @@ public class Order extends BaseEntity {
         transition(OrderStatus.WAITING_PAYMENT, OrderStatus.PENDING);
     }
 
+    public void identifyCheckout(String key, String hash) {
+        checkoutKey = key;
+        requestHash = hash;
+    }
+
+    public void hold() {
+        onHold = true;
+    }
+
+    public void beginAuthorizedCancellation() {
+        if (status == OrderStatus.CANCELED) {
+            throw new ApiException(ErrorCode.ORDER_NOT_CANCELABLE);
+        }
+        if (status != OrderStatus.COMPLETED) {
+            status = OrderStatus.CANCELING;
+        }
+        onHold = true;
+    }
+
+    public void finishAuthorizedCancellation() {
+        if (status != OrderStatus.COMPLETED) {
+            status = OrderStatus.CANCELED;
+        }
+    }
+
     public void beginOnlineCancellation() {
         if (!isOnlinePayment() || (status != OrderStatus.WAITING_PAYMENT && status != OrderStatus.PENDING)) {
             throw new ApiException(ErrorCode.ORDER_NOT_CANCELABLE);
@@ -162,7 +197,7 @@ public class Order extends BaseEntity {
     }
 
     private void transition(OrderStatus expected, OrderStatus next) {
-        if (status != expected) {
+        if (onHold || status != expected) {
             throw new ApiException(ErrorCode.INVALID_ORDER_STATUS);
         }
         status = next;

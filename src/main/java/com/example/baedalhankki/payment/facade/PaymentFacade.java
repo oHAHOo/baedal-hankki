@@ -12,6 +12,7 @@ import com.example.baedalhankki.payment.dto.PaymentPrepareResponseDto;
 import com.example.baedalhankki.payment.dto.PaymentResponseDto;
 import com.example.baedalhankki.payment.entity.PaymentStatus;
 import com.example.baedalhankki.payment.service.PaymentService;
+import com.example.baedalhankki.refund.service.PaymentRecoveryStore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Component;
 public class PaymentFacade {
     private final PaymentService payments;
     private final PaymentGateway gateway;
+    private final PaymentRecoveryStore recovery;
 
     public PaymentPrepareResponseDto prepare(Long orderId, Long customerId) {
         return payments.prepare(orderId, customerId, gateway.getClientKey());
@@ -36,6 +38,7 @@ public class PaymentFacade {
             validateIdentity(operation, result);
         }
         if (result == null || "READY".equals(result.status()) || "IN_PROGRESS".equals(result.status())) {
+            recovery.checkRetryWindow(orderId, false);
             result = gateway.confirm(operation.paymentKey(), operation.payment().providerOrderId(),
                     operation.payment().amount(), "confirm_" + operation.payment().providerOrderId());
         }
@@ -49,12 +52,18 @@ public class PaymentFacade {
                 || result.balanceAmount() != operation.payment().amount()) {
             throw new ApiException(ErrorCode.PAYMENT_STATE_CONFLICT);
         }
-        return payments.finishConfirmation(orderId, customerId);
+        PaymentResponseDto confirmed = payments.finishConfirmation(orderId, customerId);
+        if (confirmed.status() == PaymentStatus.CANCELING) {
+            cancelOrder(orderId, customerId);
+            return payments.getPayment(orderId, customerId);
+        }
+        return confirmed;
     }
 
     public OrderStateResponseDto cancelOrder(Long orderId, Long customerId) {
         PaymentOperation operation = payments.beginCancellation(orderId, customerId);
-        if (operation.order().status() == OrderStatus.CANCELED) {
+        if (operation.order().status() == OrderStatus.CANCELED
+                || operation.payment() != null && operation.payment().status() == PaymentStatus.CONFIRMING) {
             return operation.order();
         }
         gateway.checkAvailable();
@@ -62,13 +71,14 @@ public class PaymentFacade {
                 .orElseThrow(() -> new ApiException(ErrorCode.PAYMENT_RETRY_REQUIRED));
         validateIdentity(operation, result);
         if ("DONE".equals(result.status())) {
+            recovery.checkRetryWindow(orderId, true);
             result = gateway.cancel(operation.paymentKey(), "cancel_" + operation.payment().providerOrderId());
         }
         validateIdentity(operation, result);
         if (!"CANCELED".equals(result.status()) || result.balanceAmount() == null || result.balanceAmount() != 0) {
             throw new ApiException(ErrorCode.PAYMENT_STATE_CONFLICT);
         }
-        return payments.finishCancellation(orderId, customerId);
+        return payments.finishCancellation(orderId, customerId, result.lastCancelTransactionKey());
     }
 
     private void validateIdentity(PaymentOperation operation, ProviderPayment result) {

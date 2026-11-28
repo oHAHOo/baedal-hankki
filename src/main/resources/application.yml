@@ -8,6 +8,16 @@ server:
   error:
     include-message: never
 app:
+  refund:
+    webhook-security-key: ${TOSS_WEBHOOK_SECURITY_KEY:}
+    enabled: ${REFUND_RECOVERY_ENABLED:true}
+    poll-interval: 60s
+    recovery-delay: 60s
+    alert-after: 10m
+    unpaid-expiry: 30m
+    automatic-retry-limit: 14d
+    lease-duration: 60s
+    batch-size: 20
   payment:
     toss:
       client-key: ${TOSS_CLIENT_KEY:}

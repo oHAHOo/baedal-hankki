@@ -16,6 +16,10 @@ import com.example.baedalhankki.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.example.baedalhankki.refund.entity.RefundRequest;
+import com.example.baedalhankki.refund.entity.RefundStatus;
+import com.example.baedalhankki.refund.repository.RefundRequestRepository;
+import java.time.Clock;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentService {
     private final OrderRepository orders;
     private final PaymentRepository payments;
+    private final RefundRequestRepository refunds;
+    private final Clock clock;
 
     @Transactional
     public PaymentPrepareResponseDto prepare(Long orderId, Long customerId, String clientKey) {
@@ -57,7 +63,13 @@ public class PaymentService {
         if (payment.getStatus() != PaymentStatus.PAID && order.getStatus() != OrderStatus.WAITING_PAYMENT) {
             throw new ApiException(ErrorCode.PAYMENT_STATE_CONFLICT);
         }
+        boolean starting = payment.getStatus() == PaymentStatus.READY;
         payment.beginConfirmation(request.paymentKey());
+        if (starting) {
+            payment.trackOperation(clock.instant());
+        } else {
+            payment.wakeUp(clock.instant());
+        }
         return snapshot(order, payment);
     }
 
@@ -68,7 +80,12 @@ public class PaymentService {
         // 다른 동일 요청이 먼저 완료하거나 그 이후 취소한 상태를 되돌리지 않는다.
         if (payment.getStatus() == PaymentStatus.CONFIRMING) {
             payment.approve();
-            order.markPaid();
+            if (payment.isCancellationRequested()) {
+                payment.beginCancellation();
+                payment.trackOperation(clock.instant());
+            } else {
+                order.markPaid();
+            }
         }
         return PaymentResponseDto.from(payment);
     }
@@ -86,7 +103,9 @@ public class PaymentService {
     public PaymentOperation beginCancellation(Long orderId, Long customerId) {
         Order order = findForUpdate(orderId, customerId);
         if (!order.isOnlinePayment()) {
+            recordCancellation(order, customerId);
             order.cancel();
+            completeRefund(orderId, null);
             return snapshot(order, null);
         }
         Payment payment = payments.findByOrderId(orderId).orElse(null);
@@ -94,29 +113,55 @@ public class PaymentService {
             return snapshot(order, payment);
         }
         if (payment != null && payment.getStatus() == PaymentStatus.CONFIRMING) {
-            throw new ApiException(ErrorCode.PAYMENT_STATE_CONFLICT);
+            if (!payment.isCancellationRequested()) {
+                recordCancellation(order, customerId);
+                order.beginOnlineCancellation();
+                payment.requestCancellation();
+            }
+            payment.wakeUp(clock.instant());
+            return snapshot(order, payment);
         }
         if (order.getStatus() != OrderStatus.CANCELING) {
+            recordCancellation(order, customerId);
             order.beginOnlineCancellation();
         }
         if (payment != null) {
+            boolean starting = payment.getStatus() == PaymentStatus.PAID;
             payment.beginCancellation();
+            payment.requestCancellation();
+            if (starting) {
+                payment.trackOperation(clock.instant());
+            } else {
+                payment.wakeUp(clock.instant());
+            }
         }
         if (payment == null || payment.getStatus() == PaymentStatus.CANCELED) {
             order.finishOnlineCancellation();
+            completeRefund(orderId, null);
         }
         return snapshot(order, payment);
     }
 
     @Transactional
-    public OrderStateResponseDto finishCancellation(Long orderId, Long customerId) {
+    public OrderStateResponseDto finishCancellation(Long orderId, Long customerId, String transactionKey) {
         Order order = findForUpdate(orderId, customerId);
         Payment payment = findPayment(orderId);
         if (payment.getStatus() == PaymentStatus.CANCELING) {
             payment.cancel();
-            order.finishOnlineCancellation();
+            order.finishAuthorizedCancellation();
+            completeRefund(orderId, transactionKey);
         }
         return OrderStateResponseDto.from(order);
+    }
+
+    private void recordCancellation(Order order, Long customerId) {
+        refunds.save(RefundRequest.create(order, customerId, "CUSTOMER", "고객의 주문 취소", true, clock.instant()));
+    }
+
+    private void completeRefund(Long orderId, String transactionKey) {
+        refunds.findFirstByOrderIdOrderByIdDesc(orderId)
+                .filter(refund -> refund.getStatus() == RefundStatus.PROCESSING)
+                .ifPresent(refund -> refund.complete(transactionKey, clock.instant()));
     }
 
     private Order findForUpdate(Long orderId, Long customerId) {
